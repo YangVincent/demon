@@ -16,4 +16,7 @@ export const config = {
   todoist: {
     apiToken: () => requireEnv("TODOIST_API_TOKEN"),
   },
+  notion: {
+    apiToken: () => requireEnv("NOTION_API_TOKEN"),
+  },
 };

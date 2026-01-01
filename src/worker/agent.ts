@@ -8,16 +8,25 @@ import { conversationStore } from "../memory/conversations.js";
 
 const SYSTEM_PROMPT = `You are a helpful digital butler assistant. You help the user with various tasks and questions.
 
-You have access to the user's Todoist task manager. You can:
-- List their tasks (optionally filtered by project or due date)
+You have access to:
+
+**Todoist** - Task management:
+- List tasks (with filters like "today", "overdue")
 - Create new tasks with natural language due dates
 - Mark tasks as complete
 - Update existing tasks
 
-When the user asks about tasks, todos, or reminders, use the Todoist tools to help them.
-Be concise but friendly. When listing tasks, format them nicely.
+**Notion** - Notes and databases:
+- Search for pages and databases
+- Query database entries
+- Create new pages or database entries
+- Read page content
+- Append content to pages
 
-You have memory of previous messages in this conversation. You can reference what was discussed earlier.`;
+When the user asks about tasks/todos, use Todoist. When they ask about notes, documents, or databases, use Notion.
+Be concise but friendly. Format results nicely.
+
+You have memory of previous messages in this conversation.`;
 
 export function startAgent(): void {
   const client = new Anthropic({
@@ -101,7 +110,30 @@ async function processWithTools(
       const textBlock = response.content.find(
         (block): block is Anthropic.TextBlock => block.type === "text"
       );
-      const responseText = textBlock?.text || "I couldn't generate a response.";
+
+      let responseText: string;
+      if (textBlock?.text) {
+        responseText = textBlock.text;
+      } else {
+        // Build debug info when no text response
+        const lastToolResults = messages[messages.length - 1];
+        let debugInfo = `No text response from Claude.\n`;
+        debugInfo += `Stop reason: ${response.stop_reason}\n`;
+        debugInfo += `Content blocks: ${response.content.map(b => b.type).join(", ") || "none"}\n`;
+
+        if (lastToolResults?.role === "user" && Array.isArray(lastToolResults.content)) {
+          debugInfo += `\nLast tool results:\n`;
+          for (const result of lastToolResults.content) {
+            if (result.type === "tool_result") {
+              const preview = String(result.content).slice(0, 200);
+              debugInfo += `- ${result.is_error ? "ERROR: " : ""}${preview}${String(result.content).length > 200 ? "..." : ""}\n`;
+            }
+          }
+        }
+
+        responseText = debugInfo;
+        console.error("[Agent] No text response:", debugInfo);
+      }
 
       // Save the conversation (just the user message and final assistant response)
       conversationStore.addUserMessage(chatId, userMessage);

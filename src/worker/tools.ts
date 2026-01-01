@@ -1,6 +1,7 @@
 import { TodoistApi } from "@doist/todoist-api-typescript";
 import type { Tool, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { config } from "../config.js";
+import { notionTools, executeNotionTool } from "./notionTools.js";
 
 // Types for Todoist responses
 interface TodoistTask {
@@ -123,6 +124,8 @@ export const tools: Tool[] = [
       required: ["task_id"],
     },
   },
+  // Include Notion tools
+  ...notionTools,
 ];
 
 // Tool execution
@@ -130,6 +133,11 @@ export async function executeTool(
   name: string,
   input: Record<string, unknown>
 ): Promise<ToolResultBlockParam> {
+  // Route Notion tools to their handler
+  if (name.startsWith("notion_")) {
+    return executeNotionTool(name, input);
+  }
+
   try {
     const result = await executeToolInternal(name, input);
     return {
