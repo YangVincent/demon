@@ -256,13 +256,38 @@ async function executeToolInternal(
 
     case "update_task": {
       const taskId = String(input.task_id);
-      const updates: { content?: string; dueString?: string; priority?: number } = {};
+      const token = config.todoist.apiToken();
 
+      // Build update payload with REST API field names
+      const updates: Record<string, unknown> = {};
       if (input.content) updates.content = String(input.content);
-      if (input.due_string) updates.dueString = String(input.due_string);
+      if (input.due_string) {
+        updates.due_string = String(input.due_string);
+        updates.due_lang = "en";
+      }
       if (input.priority) updates.priority = Number(input.priority);
 
-      const task = await client.updateTask(taskId, updates) as unknown as TodoistTask;
+      const response = await fetch(`https://api.todoist.com/rest/v2/tasks/${taskId}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Todoist API error ${response.status}: ${errorText}`);
+      }
+
+      const task = await response.json() as {
+        id: string;
+        content: string;
+        priority: number;
+        due?: { date: string; string: string } | null;
+      };
+
       return {
         id: task.id,
         content: task.content,
