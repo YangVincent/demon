@@ -6,8 +6,8 @@ async function main() {
   console.log("Starting Demon - Digital Butler");
   console.log("================================\n");
 
-  // Start the Claude agent worker
-  startAgent();
+  // Start the Claude agent worker (connects to MCP servers)
+  await startAgent();
 
   // Start input sources
   startTelegramBot();

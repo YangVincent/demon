@@ -6,6 +6,10 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function optionalEnv(name: string): string | undefined {
+  return process.env[name];
+}
+
 export const config = {
   telegram: {
     token: () => requireEnv("TELEGRAM_BOT_TOKEN"),
@@ -18,5 +22,8 @@ export const config = {
   },
   notion: {
     apiToken: () => requireEnv("NOTION_API_TOKEN"),
+  },
+  tavily: {
+    apiKey: () => optionalEnv("TAVILY_API_KEY"),
   },
 };

@@ -3,8 +3,9 @@ import type { MessageParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resou
 import { bus } from "../bus/eventBus.js";
 import type { IncomingMessage } from "../bus/types.js";
 import { config } from "../config.js";
-import { tools, executeTool } from "./tools.js";
+import { getAllTools, executeTool } from "./tools.js";
 import { conversationStore } from "../memory/conversations.js";
+import { mcpManager, type MCPServerConfig } from "../mcp/client.js";
 
 const SYSTEM_PROMPT = `You are a helpful digital butler assistant. You help the user with various tasks and questions.
 
@@ -23,15 +24,54 @@ You have access to:
 - Read page content
 - Append content to pages
 
-When the user asks about tasks/todos, use Todoist. When they ask about notes, documents, or databases, use Notion.
+**Web Search** - Search the internet:
+- Look up current information, news, or facts
+- Find answers to questions that need up-to-date information
+
+When the user asks about tasks/todos, use Todoist. When they ask about notes, documents, or databases, use Notion. When they need current information from the web, use web search.
 Be concise but friendly. Format results nicely.
 
 You have memory of previous messages in this conversation.`;
 
-export function startAgent(): void {
+export async function startAgent(): Promise<void> {
   const client = new Anthropic({
     apiKey: config.anthropic.apiKey(),
   });
+
+  // Connect to MCP servers
+  const mcpServers: MCPServerConfig[] = [
+    {
+      name: "todoist",
+      command: "npx",
+      args: ["-y", "todoist-mcp"],
+      env: { API_KEY: config.todoist.apiToken() },
+    },
+    {
+      name: "notion",
+      command: "npx",
+      args: ["-y", "@notionhq/notion-mcp-server"],
+      env: { NOTION_TOKEN: config.notion.apiToken() },
+    },
+  ];
+
+  // Add Tavily if API key is configured
+  const tavilyKey = config.tavily.apiKey();
+  if (tavilyKey) {
+    mcpServers.push({
+      name: "tavily",
+      command: "npx",
+      args: ["-y", "tavily-mcp"],
+      env: { TAVILY_API_KEY: tavilyKey },
+    });
+  }
+
+  for (const server of mcpServers) {
+    try {
+      await mcpManager.connectServer(server);
+    } catch (error) {
+      console.warn(`[Agent] Could not connect to ${server.name} MCP server:`, error);
+    }
+  }
 
   bus.subscribe("message:incoming", async (message: IncomingMessage) => {
     console.log(`[Agent] Processing message: "${message.text}"`);
@@ -96,7 +136,7 @@ async function processWithTools(
       model: "claude-sonnet-4-20250514",
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
-      tools,
+      tools: getAllTools(),
       messages,
     });
 
