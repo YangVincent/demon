@@ -54,7 +54,7 @@ export const tools: Tool[] = [
   {
     name: "create_task",
     description:
-      "Create a new task in Todoist. Supports natural language due dates like 'tomorrow', 'next monday', 'in 3 days'.",
+      "Create a new task in Todoist. Supports natural language due dates like 'tomorrow', 'next monday', 'in 3 days'. Defaults to due today if no date specified.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -65,7 +65,7 @@ export const tools: Tool[] = [
         due_string: {
           type: "string",
           description:
-            "Natural language due date like 'tomorrow', 'next monday', 'jan 15', 'in 3 days'. Optional.",
+            "Natural language due date like 'tomorrow', 'next monday', 'jan 15', 'in 3 days'. Defaults to 'today' if not provided.",
         },
         priority: {
           type: "number",
@@ -226,7 +226,7 @@ async function executeToolInternal(
 
       const task = await client.addTask({
         content: String(input.content),
-        dueString: input.due_string ? String(input.due_string) : undefined,
+        dueString: input.due_string ? String(input.due_string) : "today",
         priority: input.priority ? Number(input.priority) : undefined,
         projectId,
       }) as unknown as TodoistTask;
