@@ -4,17 +4,20 @@ import { bus } from "../bus/eventBus.js";
 import type { IncomingMessage } from "../bus/types.js";
 import { config } from "../config.js";
 import { tools, executeTool } from "./tools.js";
+import { conversationStore } from "../memory/conversations.js";
 
 const SYSTEM_PROMPT = `You are a helpful digital butler assistant. You help the user with various tasks and questions.
 
 You have access to the user's Todoist task manager. You can:
-- List their tasks (optionally filtered by project)
+- List their tasks (optionally filtered by project or due date)
 - Create new tasks with natural language due dates
 - Mark tasks as complete
 - Update existing tasks
 
 When the user asks about tasks, todos, or reminders, use the Todoist tools to help them.
-Be concise but friendly. When listing tasks, format them nicely.`;
+Be concise but friendly. When listing tasks, format them nicely.
+
+You have memory of previous messages in this conversation. You can reference what was discussed earlier.`;
 
 export function startAgent(): void {
   const client = new Anthropic({
@@ -25,7 +28,19 @@ export function startAgent(): void {
     console.log(`[Agent] Processing message: "${message.text}"`);
 
     try {
-      const responseText = await processWithTools(client, message.text);
+      // Check for clear memory command
+      if (message.text.toLowerCase().trim() === "/clear") {
+        conversationStore.clear(message.chatId);
+        bus.publish("message:response", {
+          messageId: message.id,
+          chatId: message.chatId,
+          text: "Conversation history cleared.",
+          source: message.source === "telegram" ? "telegram" : "webhook",
+        });
+        return;
+      }
+
+      const responseText = await processWithTools(client, message.chatId, message.text);
       console.log(`[Agent] Response: "${responseText.slice(0, 100)}..."`);
 
       bus.publish("message:response", {
@@ -49,8 +64,17 @@ export function startAgent(): void {
   console.log("[Agent] Worker started, listening for messages");
 }
 
-async function processWithTools(client: Anthropic, userMessage: string): Promise<string> {
+async function processWithTools(
+  client: Anthropic,
+  chatId: string,
+  userMessage: string
+): Promise<string> {
+  // Get existing conversation history
+  const history = conversationStore.getHistory(chatId);
+
+  // Build messages array with history + new message
   const messages: MessageParam[] = [
+    ...history,
     {
       role: "user",
       content: userMessage,
@@ -77,7 +101,13 @@ async function processWithTools(client: Anthropic, userMessage: string): Promise
       const textBlock = response.content.find(
         (block): block is Anthropic.TextBlock => block.type === "text"
       );
-      return textBlock?.text || "I couldn't generate a response.";
+      const responseText = textBlock?.text || "I couldn't generate a response.";
+
+      // Save the conversation (just the user message and final assistant response)
+      conversationStore.addUserMessage(chatId, userMessage);
+      conversationStore.addAssistantMessage(chatId, responseText);
+
+      return responseText;
     }
 
     // Execute tools and add results to messages
