@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { startTelegramBot } from "./inputs/telegram.js";
 import { startAgent } from "./worker/agent.js";
+import "./claude-code/executor.js"; // Initialize Claude Code executor
 
 async function main() {
   console.log("Starting Demon - Digital Butler");

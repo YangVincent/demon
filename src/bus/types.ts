@@ -1,3 +1,10 @@
+import type {
+  ClaudeCodeRequest,
+  ClaudeCodePermissionRequest,
+  ClaudeCodePermissionResponse,
+  ClaudeCodeResponse,
+} from "../claude-code/types.js";
+
 export interface IncomingMessage {
   id: string;
   source: "telegram" | "webhook" | "cron";
@@ -17,4 +24,8 @@ export interface OutgoingResponse {
 export type BusEvents = {
   "message:incoming": IncomingMessage;
   "message:response": OutgoingResponse;
+  "claude-code:request": ClaudeCodeRequest;
+  "claude-code:permission": ClaudeCodePermissionRequest;
+  "claude-code:permission-response": ClaudeCodePermissionResponse;
+  "claude-code:response": ClaudeCodeResponse;
 };
